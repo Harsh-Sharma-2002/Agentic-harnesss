@@ -1,30 +1,39 @@
+# src/agents/text2sql/sql_agent/nodes/discovery_node.py
+
 from __future__ import annotations
 
 import json
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
+from pydantic import BaseModel, Field
 
 from src.agents.core.call_llm import get_llm
 from src.agents.text2sql.sql_agent.nodes.prompts import DISCOVERY_PROMPT
 from src.agents.text2sql.sql_agent.state import SQLAgentState
-from src.agents.text2sql.sql_agent.tools import DISCOVERY_TOOLS
+
+
+class DiscoveryQuery(BaseModel):
+    queries: list[str] = Field(
+        description=(
+            "One or more independent read-only PostgreSQL "
+            "metadata queries required for the next discovery step."
+        )
+    )
 
 
 async def discovery_node(state: SQLAgentState) -> dict:
     """
-    Decide the next database discovery action.
+    Generate the next SQL query required for database discovery.
 
     The context-check node has already determined what information
-    is missing. This node uses the discovery tools to decide how
-    to obtain that information.
-
-    It does not execute tools itself.
+    is missing. This node decides what metadata query should be run
+    next, but does not validate or execute it.
     """
 
     llm = get_llm()
 
-    discovery_llm = llm.bind_tools(
-        DISCOVERY_TOOLS
+    discovery_llm = llm.with_structured_output(
+        DiscoveryQuery
     )
 
     system_prompt = DISCOVERY_PROMPT.format(
@@ -37,6 +46,7 @@ async def discovery_node(state: SQLAgentState) -> dict:
             state["missing_information"],
             indent=2,
         ),
+        error=state["error"] or "None",
     )
 
     messages = [
@@ -44,8 +54,17 @@ async def discovery_node(state: SQLAgentState) -> dict:
         *state["discovery_messages"],
     ]
 
-    response = await discovery_llm.ainvoke(messages)
+    result = await discovery_llm.ainvoke(messages)
 
     return {
-        "discovery_messages": [response]
+    "active_loop": "discovery",
+    "candidate_sql": result.queries,
+    "discovery_messages": [
+        AIMessage(
+            content=json.dumps(
+                {"queries": result.queries},
+                indent=2,
+                )
+            )
+        ],
     }

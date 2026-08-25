@@ -1,3 +1,5 @@
+# src/agents/text2sql/sql_agent/tools.py
+
 from __future__ import annotations
 
 import asyncio
@@ -18,30 +20,26 @@ DATABASE_CONFIG = {
 @tool
 async def run_sql(query: str) -> dict[str, Any]:
     """
-    Execute a read-only SQL query against PostgreSQL.
+    Execute a SQL query against PostgreSQL.
 
-    This tool may be used both for database schema discovery
-    and for executing the final user query.
-
-    Only SELECT queries are permitted.
+    SQL validation and safety checks are performed by the
+    validator node before this tool is called.
     """
 
-    if not query.strip().lower().startswith("select"):
-        return {
-            "success": False,
-            "error": "Only read-only SELECT queries are allowed.",
-            "rows": [],
-        }
-
     def _execute() -> dict[str, Any]:
-
         try:
             with psycopg.connect(
                 **DATABASE_CONFIG
             ) as connection:
 
-                with connection.cursor() as cursor:
+                # Defense in depth.
+                # Even if application validation fails,
+                # PostgreSQL will reject write operations.
+                connection.execute(
+                    "SET TRANSACTION READ ONLY"
+                )
 
+                with connection.cursor() as cursor:
                     cursor.execute(query)
 
                     columns = [
@@ -59,20 +57,18 @@ async def run_sql(query: str) -> dict[str, Any]:
                     return {
                         "success": True,
                         "error": None,
+                        "columns": columns,
                         "rows": result,
+                        "row_count": len(result),
                     }
 
         except Exception as exc:
-
             return {
                 "success": False,
                 "error": str(exc),
+                "columns": [],
                 "rows": [],
+                "row_count": 0,
             }
 
     return await asyncio.to_thread(_execute)
-
-
-DISCOVERY_TOOLS = [
-    run_sql,
-]

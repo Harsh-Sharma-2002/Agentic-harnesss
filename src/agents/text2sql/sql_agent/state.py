@@ -62,14 +62,15 @@ class SQLAgentState(TypedDict):
     ] | None
 
     # SQL currently proposed by either reasoning loop.
-    candidate_sql: str | None
+    candidate_sql: list[str] | None
+    sql_valid: bool
 
     # Final validated SQL used to answer the user.
     # Discovery queries are never stored here.
-    final_sql: str | None
+    final_sql: list[str] | None
 
     # Latest database execution result.
-    execution_result: Any | None
+    execution_result: list[dict[str,Any]] | None
 
     # ======================================================
     # Validation / Retry
