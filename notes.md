@@ -1,0 +1,1 @@
+* Offload the DB config to the env file

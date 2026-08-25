@@ -1,6 +1,8 @@
+# src/agents/text2sql/sql_agent/state.py
+
 from __future__ import annotations
 
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
@@ -12,7 +14,7 @@ class SQLAgentState(TypedDict):
 
     Discovery and SQL execution maintain separate short-term
     memories. Persistent database knowledge lives in the
-    SchemaRegistry, not in this state.
+    schema registry, not in this state.
     """
 
     # ======================================================
@@ -31,8 +33,8 @@ class SQLAgentState(TypedDict):
         add_messages,
     ]
 
-    # Cached + newly discovered schema information relevant
-    # to this request.
+    # Cached + newly discovered database knowledge
+    # relevant to the current request.
     schema_context: dict[str, Any]
 
     context_sufficient: bool
@@ -48,12 +50,33 @@ class SQLAgentState(TypedDict):
         add_messages,
     ]
 
-    generated_sql: str | None
+    # ======================================================
+    # Shared SQL Execution
+    # ======================================================
 
+    # Identifies which reasoning loop produced candidate_sql.
+    # Used for routing after validation/execution failures.
+    active_loop: Literal[
+        "discovery",
+        "sql",
+    ] | None
+
+    # SQL currently proposed by either reasoning loop.
+    candidate_sql: str | None
+
+    # Final validated SQL used to answer the user.
+    # Discovery queries are never stored here.
+    final_sql: str | None
+
+    # Latest database execution result.
     execution_result: Any | None
 
-    # Latest actionable failure.
-    # Used as repair context by the SQL loop.
+    # ======================================================
+    # Validation / Retry
+    # ======================================================
+
+    # Latest actionable validation, execution, or
+    # verification error.
     error: str | None
 
     retry_count: int
@@ -70,4 +93,6 @@ class SQLAgentState(TypedDict):
 
     response: dict[str, Any] | None
 
+    # Records eventually exposed to the GlobalState
+    # for debugging and observability.
     execution_records: list[dict[str, Any]]
