@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Streamlit
+.streamlit/
+
+# Testing
+.pytest_cache/
+
+# LangSmith
+.langsmith/
+
+# Misc
+.coverage
