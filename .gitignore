@@ -30,3 +30,4 @@ env/
 
 # Misc
 .coverage
+context.json
