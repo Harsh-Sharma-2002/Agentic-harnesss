@@ -41,6 +41,14 @@ class SQLAgentState(TypedDict):
 
     missing_information: list[str]
 
+    # Whether the discovery reasoner believes enough
+# schema information has been collected.
+    discovery_complete: bool
+
+# Newly discovered reusable knowledge waiting
+# to be persisted into the schema registry.
+    schema_update: dict[str, Any]
+
     # ======================================================
     # SQL Loop
     # ======================================================
@@ -62,15 +70,15 @@ class SQLAgentState(TypedDict):
     ] | None
 
     # SQL currently proposed by either reasoning loop.
-    candidate_sql: list[str] | None
+    candidate_sql: list[str] 
     sql_valid: bool
 
     # Final validated SQL used to answer the user.
     # Discovery queries are never stored here.
-    final_sql: list[str] | None
+    final_sql: list[str] 
 
     # Latest database execution result.
-    execution_result: list[dict[str,Any]] | None
+    execution_result: list[dict[str,Any]] 
 
     # ======================================================
     # Validation / Retry

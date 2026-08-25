@@ -28,6 +28,8 @@ async def init_node(state: SQLAgentState) -> dict:
         "schema_context": {},
         "context_sufficient": False,
         "missing_information": [],
+        "discovery_complete": False,
+        "schema_update": {},
 
         # Shared SQL execution state
         "active_loop": None,

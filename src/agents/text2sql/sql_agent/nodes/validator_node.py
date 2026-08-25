@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 
 from src.agents.text2sql.sql_agent.state import SQLAgentState
 
@@ -54,7 +54,7 @@ def _validation_failure(
         "error": error,
         "retry_count": state["retry_count"] + 1,
         message_field: [
-            HumanMessage(
+            SystemMessage(
                 content=f"SQL validation failed: {error}"
             )
         ],
