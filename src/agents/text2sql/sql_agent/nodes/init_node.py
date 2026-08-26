@@ -48,4 +48,8 @@ async def init_node(state: SQLAgentState) -> dict:
         # Output
         "response": None,
         "execution_records": [],
+
+        # SQL loop state
+        "execution_complete": False,
+        "sql_results": [],
     }

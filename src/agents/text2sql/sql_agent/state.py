@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+
+
+from operator import add
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -22,6 +25,7 @@ class SQLAgentState(TypedDict):
     # ======================================================
 
     query: str
+
     database_id: str
 
     # ======================================================
@@ -33,20 +37,21 @@ class SQLAgentState(TypedDict):
         add_messages,
     ]
 
-    # Cached + newly discovered database knowledge
-    # relevant to the current request.
+    # Cached database knowledge relevant to this request.
     schema_context: dict[str, Any]
 
+    # Result of the initial registry-context sufficiency check.
     context_sufficient: bool
 
+    # Database information missing from the cached context.
     missing_information: list[str]
 
-    # Whether the discovery reasoner believes enough
-# schema information has been collected.
+    # Whether the discovery reasoner believes enough schema
+    # information has been collected.
     discovery_complete: bool
 
-# Newly discovered reusable knowledge waiting
-# to be persisted into the schema registry.
+    # Newly discovered reusable knowledge waiting to be
+    # persisted into the schema registry.
     schema_update: dict[str, Any]
 
     # ======================================================
@@ -58,27 +63,46 @@ class SQLAgentState(TypedDict):
         add_messages,
     ]
 
+    # Whether the SQL reasoner believes the accumulated
+    # execution results are sufficient to answer the user.
+    execution_complete: bool
+
+    # Successful SQL-loop results accumulated across
+    # multiple reasoning/execution iterations.
+    #
+    # Unlike execution_result, this does not contain
+    # discovery-query results.
+    sql_results: Annotated[
+    list[dict[str, Any]],
+    add,
+    ]
+
     # ======================================================
-    # Shared SQL Execution
+    # Shared SQL Execution Pipeline
     # ======================================================
 
-    # Identifies which reasoning loop produced candidate_sql.
-    # Used for routing after validation/execution failures.
+    # Identifies which reasoning loop currently owns the
+    # shared validator -> executor -> verifier pipeline.
     active_loop: Literal[
         "discovery",
         "sql",
     ] | None
 
-    # SQL currently proposed by either reasoning loop.
-    candidate_sql: list[str] 
+    # SQL batch currently proposed by the active reasoning loop.
+    candidate_sql: list[str]
+
+    # Whether candidate_sql passed the shared validator.
     sql_valid: bool
 
-    # Final validated SQL used to answer the user.
-    # Discovery queries are never stored here.
-    final_sql: list[str] 
+    # Final SQL statements associated with the completed
+    # user-facing SQL execution.
+    final_sql: list[str]
 
-    # Latest database execution result.
-    execution_result: list[dict[str,Any]] 
+    # Results from the latest execution batch.
+    #
+    # This field is shared by discovery and SQL execution.
+    # SQL-loop results are additionally accumulated in sql_results.
+    execution_result: list[dict[str, Any]]
 
     # ======================================================
     # Validation / Retry
@@ -94,6 +118,8 @@ class SQLAgentState(TypedDict):
     # Verification
     # ======================================================
 
+    # Whether the latest execution_result passed the
+    # deterministic result verifier.
     verified: bool
 
     # ======================================================

@@ -26,8 +26,11 @@ async def executor_node(
     Execute a validated batch of SQL queries.
 
     Execution logic is shared by both the discovery and SQL loops.
-    active_loop is used only to route execution feedback into the
-    appropriate short-term message history.
+
+    active_loop is used only to:
+    1. Route execution feedback into the correct short-term memory.
+    2. Accumulate successful user-facing SQL results when the
+       active loop is the SQL loop.
     """
 
     candidate_queries = state["candidate_sql"]
@@ -68,8 +71,7 @@ async def executor_node(
         ]
     )
 
-    # Keep each result associated with the SQL
-    # statement that produced it.
+    # Preserve query -> result provenance.
     execution_results = [
         {
             "query": query,
@@ -101,9 +103,14 @@ async def executor_node(
         )
 
         return {
+            # Latest batch is still preserved for debugging.
             "execution_result": execution_results,
+
             "error": error,
             "retry_count": state["retry_count"] + 1,
+
+            # Failure feedback goes only to the memory of
+            # the reasoning loop that produced the SQL.
             message_field: [
                 SystemMessage(
                     content=(
@@ -118,9 +125,14 @@ async def executor_node(
     # Execution succeeded
     # ======================================================
 
-    return {
+    update = {
+        # Shared field containing only the latest batch.
         "execution_result": execution_results,
+
         "error": None,
+
+        # Successful database observation is returned to
+        # whichever reasoning loop generated the SQL.
         message_field: [
             SystemMessage(
                 content=(
@@ -134,3 +146,16 @@ async def executor_node(
             )
         ],
     }
+
+    # ======================================================
+    # Accumulate final SQL-loop evidence
+    # ======================================================
+
+    if active_loop == "sql":
+        # sql_results uses an `add` reducer in SQLAgentState,
+        # so LangGraph appends this batch to previous batches.
+        #
+        # Discovery results are intentionally excluded.
+        update["sql_results"] = execution_results
+
+    return update
