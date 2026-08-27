@@ -67,7 +67,7 @@ Rules:
    If insufficient:
    - Set discovery_complete=false.
    - Generate the next required metadata queries.
-   - Return schema_update={}.
+   - Return schema_update={{}}.
 
 3. Do not invent tables, columns, relationships, constraints, or other
    database information that has not been supported by observed metadata.
@@ -102,31 +102,31 @@ Rules:
 
 13. Use the following general structure for schema_update:
 
-{
+{{
   "description": "<short database description>",
-  "tables": {
-    "<table_name>": {
+  "tables": {{
+    "<table_name>": {{
       "description": "<short table description>",
-      "schema": {
-        "<column_name>": {
+      "schema": {{
+        "<column_name>": {{
           "type": "<database type>",
           "nullable": <true/false if known>,
           "primary_key": <true/false if known>,
           "foreign_key": <true/false if known>,
           "description": "<very short factual column description>"
-        }
-      }
-    }
-  },
+        }}
+      }}
+    }}
+  }},
   "relationships": [
-    {
+    {{
       "from": "<table.column>",
       "to": "<table.column>",
       "type": "<relationship type>",
       "description": "<short factual relationship description>"
-    }
+    }}
   ]
-}
+}}
 
 14. Preserve actual table names, column names, data types, nullability,
     primary keys, foreign keys, constraints, and relationships whenever

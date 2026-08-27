@@ -1,1 +1,15 @@
-{}
+{
+  "ecommerce": {
+    "table": "pg_stat_all_tables",
+    "columns_updated": [
+      "typbyval"
+    ],
+    "data_type_changes": [
+      {
+        "column_name": "typbyval",
+        "old_data_type": null,
+        "new_data_type": "boolean"
+      }
+    ]
+  }
+}
