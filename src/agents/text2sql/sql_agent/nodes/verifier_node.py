@@ -25,6 +25,9 @@ def _verification_failure(
     Verification logic is shared between both loops.
     active_loop is used only to place feedback into
     the correct short-term memory.
+
+    Failed results are never promoted into accumulated
+    SQL-loop evidence.
     """
 
     active_loop = state["active_loop"]
@@ -56,13 +59,28 @@ async def result_verifier_node(
 
     This node is shared by both the discovery and SQL loops.
 
-    It performs deterministic verification only. It does not decide
-    whether the result semantically satisfies the user's request or
-    whether additional discovery is required. Those decisions belong
-    to the reasoning loops.
+    It performs deterministic structural verification only.
+    It does not decide whether the results semantically satisfy
+    the user's request. That decision belongs to the active
+    reasoning loop.
+
+    When verification succeeds during the SQL loop, the verified
+    execution batch is promoted into sql_results as accumulated
+    evidence for the final response.
     """
 
     execution_results = state["execution_result"]
+
+    # ======================================================
+    # Validate active loop
+    # ======================================================
+
+    active_loop = state["active_loop"]
+
+    if active_loop not in LOOP_MESSAGE_FIELDS:
+        raise ValueError(
+            f"Invalid active_loop for result verification: {active_loop}"
+        )
 
     # ======================================================
     # Results must exist
@@ -148,7 +166,19 @@ async def result_verifier_node(
     # Verification passed
     # ======================================================
 
-    return {
+    update = {
         "verified": True,
         "error": None,
     }
+
+    # ======================================================
+    # Promote verified SQL-loop evidence
+    # ======================================================
+
+    if active_loop == "sql":
+        # sql_results uses an `add` reducer in SQLAgentState.
+        # Returning only this verified batch causes LangGraph
+        # to append it to previously verified SQL results.
+        update["sql_results"] = execution_results
+
+    return update

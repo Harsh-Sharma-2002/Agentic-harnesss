@@ -27,10 +27,12 @@ async def executor_node(
 
     Execution logic is shared by both the discovery and SQL loops.
 
-    active_loop is used only to:
-    1. Route execution feedback into the correct short-term memory.
-    2. Accumulate successful user-facing SQL results when the
-       active loop is the SQL loop.
+    active_loop is used only to route execution feedback into the
+    appropriate short-term message history.
+
+    Successful execution results are stored in execution_result as
+    the latest batch. Promotion into accumulated sql_results happens
+    only after deterministic verification succeeds.
     """
 
     candidate_queries = state["candidate_sql"]
@@ -103,14 +105,15 @@ async def executor_node(
         )
 
         return {
-            # Latest batch is still preserved for debugging.
+            # Preserve the latest attempted batch for
+            # debugging and inspection.
             "execution_result": execution_results,
 
             "error": error,
             "retry_count": state["retry_count"] + 1,
 
-            # Failure feedback goes only to the memory of
-            # the reasoning loop that produced the SQL.
+            # Feed the execution failure back into the
+            # reasoning loop that generated the SQL.
             message_field: [
                 SystemMessage(
                     content=(
@@ -125,14 +128,19 @@ async def executor_node(
     # Execution succeeded
     # ======================================================
 
-    update = {
-        # Shared field containing only the latest batch.
+    return {
+        # Latest successfully executed batch.
+        #
+        # This has NOT yet been promoted into sql_results.
+        # The verifier owns that responsibility.
         "execution_result": execution_results,
 
         "error": None,
 
-        # Successful database observation is returned to
-        # whichever reasoning loop generated the SQL.
+        # The reasoning loop can already observe the database
+        # result on its next iteration through its message
+        # history. Verification determines whether the result
+        # is accepted into accumulated final evidence.
         message_field: [
             SystemMessage(
                 content=(
@@ -146,16 +154,3 @@ async def executor_node(
             )
         ],
     }
-
-    # ======================================================
-    # Accumulate final SQL-loop evidence
-    # ======================================================
-
-    if active_loop == "sql":
-        # sql_results uses an `add` reducer in SQLAgentState,
-        # so LangGraph appends this batch to previous batches.
-        #
-        # Discovery results are intentionally excluded.
-        update["sql_results"] = execution_results
-
-    return update
