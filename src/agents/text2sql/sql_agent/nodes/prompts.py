@@ -110,7 +110,6 @@ No commentary.
 No fields other than those defined by ContextDecision.
 """
 
-
 # ==========================================================
 # Discovery
 # ==========================================================
@@ -130,10 +129,47 @@ MISSING INFORMATION (hypothesis from a prior check — verify, do not assume):
 LATEST ERROR:
 {error}
 
+DISCOVERY BUDGET:
+
+Current discovery iteration: {current_iteration}
+Maximum discovery iterations: {max_iterations}
+Remaining discovery iterations after this one: {remaining_iterations}
+
+You have a strictly limited discovery budget.
+
+Use each discovery iteration efficiently. Discover only the APPLICATION
+schema information actually required to construct SQL for the user's request.
+
+If remaining discovery iterations after this one is 0, this is your FINAL
+discovery reasoning opportunity.
+
+On every iteration:
+
+- Reuse all metadata already discovered in the conversation history.
+- Prefer targeted metadata queries that resolve multiple relevant
+  uncertainties when practical.
+- Do not repeat metadata queries whose results are already available.
+- Do not perform discovery merely to make the known schema more complete.
+- As soon as the available schema knowledge is sufficient to construct
+  the required user-facing SQL, set discovery_complete=true.
+
+On the FINAL discovery iteration:
+
+- Carefully re-read all metadata results already available.
+- Prefer completing discovery when the known schema is sufficient to
+  construct the required SQL.
+- Do not request additional metadata merely because it could provide
+  extra context or make the schema description more comprehensive.
+- Request additional metadata only if it is genuinely required to
+  construct the SQL safely.
+- Never invent missing schema information because the discovery budget
+  is ending.
+
 Previous discovery queries and database results are available in the
 conversation history.
 
 TASK:
+
 Discover only the APPLICATION schema information required to safely
 construct SQL for the user request.
 
@@ -162,56 +198,91 @@ RULES:
 
 8. A noun or attribute mentioned in the user request (e.g. "state",
    "category", "status") does NOT imply a separate table or a foreign
-   key relationship. It is very often just a plain column on a table
-   you already know about (e.g. customers.state as a text/varchar
-   value). Never assume a normalized table or FK exists for something
-   named in the request until you have actually queried the columns
-   of the relevant table and confirmed it is not a plain column.
+   key relationship.
+
+   It is often a plain column on a table already known to exist
+   (e.g. customers.state as a text/varchar value).
+
+   Never assume a normalized table or foreign-key relationship exists
+   for something named in the request until you have queried the
+   relevant table metadata and confirmed that assumption.
 
 9. MISSING INFORMATION above is a hypothesis produced by an earlier,
-   less-informed check. It is not guaranteed to be accurate. Your job
-   this turn is to verify each item against the actual catalog, not
-   to blindly satisfy it. If a discovery query already run in this
-   conversation's history answers a "missing information" item —
-   including by proving the thing does NOT exist — treat that item as
-   RESOLVED, not as still outstanding.
+   less-informed check.
 
-10. Absence is a valid discovery result. If you queried
-    information_schema.columns for a table and got back its full
-    column list, you now know everything about that table's columns
-    — do not ask for them again. If you queried pg_catalog / 
-    information_schema for foreign keys involving a table and the
-    result set was empty, that means no foreign key exists — this is
-    a completed, successful discovery outcome, not a failure to
-    retry. Only continue searching for a relationship if you have NOT
-    yet actually run a query capable of revealing it.
+   It is not guaranteed to be accurate.
 
-11. Before generating new queries, re-read the results already present
-    in the conversation history. If they already contain the full
-    column list for every table relevant to the request, and any
-    join/relationship questions have already been checked (found or
-    ruled out), discovery is complete — set discovery_complete=true
-    even if it turns out the request needs no join at all.
+   Your job is to verify each item against actual catalog evidence,
+   not blindly satisfy it.
+
+   If a discovery query already run in this conversation answers a
+   missing-information item — including by proving that the suspected
+   structure does NOT exist — treat that item as RESOLVED.
+
+10. Absence is a valid discovery result.
+
+    If you queried information_schema.columns for a table and received
+    its full column list, you now know that table's available columns.
+    Do not query for those columns again.
+
+    If you queried pg_catalog or information_schema for foreign keys
+    involving a table and the result was empty, that means no matching
+    foreign key was discovered.
+
+    A confirmed negative is a completed discovery result, not a reason
+    to repeat the same search.
+
+11. Before generating new queries, re-read the discovery results already
+    present in the conversation history.
+
+    If they already contain enough structural information for every
+    table relevant to the request, and any required relationship
+    questions have been resolved, discovery is complete.
+
+12. Discovery completeness means:
+
+    "Enough structural knowledge exists to construct the required SQL."
+
+    It does NOT mean:
+
+    "The complete database schema has been discovered."
+
+    Do not continue exploring unrelated tables, columns, constraints,
+    indexes, relationships, or metadata once the user's SQL can safely
+    be constructed.
+
+13. Be increasingly selective as the discovery budget decreases.
+
+    When remaining_iterations is small, prioritize only information
+    whose absence directly prevents construction of the required SQL.
+
+14. The discovery budget must NEVER cause fabrication.
+
+    If required schema information remains genuinely unknown, do not
+    invent it simply to set discovery_complete=true.
 
 DECISION:
 
-If more schema information is required, AND you have not already run a
-query in this conversation capable of answering it:
+If more schema information is genuinely required, AND you have not already
+run a query in this conversation capable of answering it:
+
 - discovery_complete=false
 - queries must contain the smallest useful metadata query batch
 - schema_update={{}}
 
-If enough schema information has been discovered — including cases
-where you've confirmed a suspected table/relationship does NOT exist:
+If enough schema information has been discovered — including cases where
+a suspected table, column, key, or relationship has been checked and ruled
+out:
+
 - discovery_complete=true
 - queries=[]
-- schema_update must contain the newly learned reusable APPLICATION schema,
-  reflecting only what was actually observed (do not include relationships
-  that were checked and found not to exist).
+- schema_update must contain the newly learned reusable APPLICATION schema
+  supported by actual discovery results.
 
 Do not set discovery_complete=false solely because an earlier hypothesis
-in MISSING INFORMATION hasn't been "satisfied" — satisfy it by checking,
-and a confirmed negative counts as satisfied.
+in MISSING INFORMATION has not been positively confirmed.
+
+A confirmed negative result can resolve that hypothesis.
 
 SCHEMA_UPDATE CONTRACT:
 
@@ -244,11 +315,14 @@ schema_update must use this structure:
 }}
 
 Do NOT include bookkeeping fields such as:
+
 - table
 - columns_updated
 - data_type_changes
 - observations
 - metadata_queries
+- discovery_iteration
+- remaining_iterations
 
 OUTPUT CONTRACT:
 

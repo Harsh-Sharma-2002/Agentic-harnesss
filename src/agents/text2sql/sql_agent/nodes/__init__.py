@@ -8,7 +8,7 @@ from .sql_reasoner_node import sql_reasoner_node
 from .update_registry_node import update_registry_node
 from .validator_node import sql_validator_node
 from .verifier_node import result_verifier_node
-
+from .discovery_exit_node import discovery_exit_node
 
 __all__ = [
     "context_check_node",
@@ -21,4 +21,5 @@ __all__ = [
     "sql_reasoner_node",
     "sql_validator_node",
     "update_registry_node",
+    "discovery_exit_node"
 ]

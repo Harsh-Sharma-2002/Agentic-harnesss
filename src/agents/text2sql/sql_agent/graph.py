@@ -8,6 +8,7 @@ from .state import SQLAgentState
 
 from .nodes import (
     context_check_node,
+    discovery_exit_node,
     discovery_node,
     executor_node,
     init_node,
@@ -36,17 +37,27 @@ def build_sql_agent_graph():
     The graph contains two reasoning loops:
 
     1. Discovery loop
+
        Discovers missing database knowledge and persists
        reusable schema information into the schema registry.
 
+       Discovery is bounded by a fixed reasoning budget.
+
+       If that budget is exhausted, execution passes through
+       a dedicated discovery-exit transition before entering
+       the SQL reasoning loop.
+
     2. SQL loop
+
        Generates and executes user-facing SQL until enough
        verified database evidence exists to answer the request.
 
     Both loops share the same validator, executor, and verifier.
     """
 
-    graph = StateGraph(SQLAgentState)
+    graph = StateGraph(
+        SQLAgentState
+    )
 
     # ======================================================
     # Nodes
@@ -70,6 +81,11 @@ def build_sql_agent_graph():
     graph.add_node(
         "discovery",
         discovery_node,
+    )
+
+    graph.add_node(
+        "discovery_exit",
+        discovery_exit_node,
     )
 
     graph.add_node(
@@ -129,7 +145,10 @@ def build_sql_agent_graph():
         "context_check",
         route_after_context_check,
         {
+            # Cached schema is incomplete.
             "discovery": "discovery",
+
+            # Cached schema is already sufficient.
             "sql_reasoner": "sql_reasoner",
         },
     )
@@ -142,15 +161,44 @@ def build_sql_agent_graph():
         "discovery",
         route_after_discovery,
         {
+            # More metadata discovery is required.
             "validator": "validator",
+
+            # Discovery completed normally.
+            # Persist reusable knowledge before entering
+            # the SQL reasoning loop.
             "update_registry": "update_registry",
+
+            # Discovery budget was exhausted.
+            # Cleanly transition out of discovery without
+            # persisting incomplete schema knowledge.
+            "discovery_exit": "discovery_exit",
         },
     )
 
-    # Once discovery is complete and its reusable knowledge
-    # has been persisted, enter the actual SQL loop.
+    # ======================================================
+    # Discovery -> SQL Transitions
+    # ======================================================
+
+    # Normal discovery completion:
+    #
+    # discovery
+    #     -> update_registry
+    #     -> sql_reasoner
+
     graph.add_edge(
         "update_registry",
+        "sql_reasoner",
+    )
+
+    # Exhausted discovery:
+    #
+    # discovery
+    #     -> discovery_exit
+    #     -> sql_reasoner
+
+    graph.add_edge(
+        "discovery_exit",
         "sql_reasoner",
     )
 
@@ -197,14 +245,12 @@ def build_sql_agent_graph():
         "verifier",
         route_after_verification,
         {
-            # Both successful verification and verification
-            # failure return control to the active reasoner.
-            #
-            # On success, the reasoner determines semantic
+            # Successful verification returns control to the
+            # active reasoner so it can determine semantic
             # sufficiency.
             #
-            # On failure, the reasoner receives the error and
-            # generates a repaired attempt.
+            # Verification failures also return to the active
+            # reasoner with actionable feedback.
             "discovery": "discovery",
             "sql_reasoner": "sql_reasoner",
         },
@@ -218,7 +264,7 @@ def build_sql_agent_graph():
         "sql_reasoner",
         route_after_sql_reasoner,
         {
-            # More database information is required.
+            # Additional database execution is required.
             "validator": "validator",
 
             # Enough verified SQL evidence exists.

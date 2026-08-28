@@ -17,6 +17,13 @@ from src.core.events import emit
 
 
 # ==========================================================
+# Discovery Configuration
+# ==========================================================
+
+MAX_DISCOVERY_ITERATIONS = 4
+
+
+# ==========================================================
 # Structured Discovery Decision
 # ==========================================================
 
@@ -65,38 +72,99 @@ async def discovery_node(
     """
     Control the database discovery loop.
 
-    The node examines all schema knowledge and previous discovery
-    results and decides whether:
+    The node examines known schema information and previous
+    discovery results and decides whether:
 
-    1. More information is required, in which case it generates
-       the next batch of metadata SQL queries.
+    1. More metadata discovery is required.
 
-    2. Enough information has been discovered, in which case it
-       returns a rich schema update for persistent storage.
+    2. Enough schema information has been discovered.
 
-    This node does not validate SQL, execute SQL, or persist the
-    schema registry itself.
+    Discovery is bounded by MAX_DISCOVERY_ITERATIONS.
+
+    If the discovery budget is exhausted before the reasoner
+    declares completion, discovery exits gracefully and the
+    SQL reasoning loop proceeds using the schema knowledge
+    currently available.
+
+    This node does not validate SQL, execute SQL, or persist
+    the schema registry itself.
     """
 
     # ======================================================
-    # Discovery reasoning started
+    # Current Discovery Iteration
+    # ======================================================
+
+    current_iteration = (
+        state["discovery_iteration"] + 1
+    )
+
+    remaining_iterations = max(
+        MAX_DISCOVERY_ITERATIONS
+        - current_iteration,
+        0,
+    )
+
+    # ======================================================
+    # Defensive Invariant
+    # ======================================================
+
+    if current_iteration > MAX_DISCOVERY_ITERATIONS:
+
+        emit(
+            component="discovery",
+            event="invalid_iteration",
+            message=(
+                "Discovery node was invoked after its "
+                "iteration budget was exhausted."
+            ),
+            data={
+                "database_id": state["database_id"],
+                "discovery_iteration": (
+                    current_iteration
+                ),
+                "max_discovery_iterations": (
+                    MAX_DISCOVERY_ITERATIONS
+                ),
+            },
+        )
+
+        raise RuntimeError(
+            "Discovery node was invoked after its "
+            "iteration budget had already been exhausted."
+        )
+
+    # ======================================================
+    # Discovery Reasoning Started
     # ======================================================
 
     emit(
         component="discovery",
         event="reasoning_started",
-        message="Evaluating missing database schema knowledge.",
+        message=(
+            "Evaluating missing database schema knowledge."
+        ),
         data={
             "database_id": state["database_id"],
             "missing_information": state[
                 "missing_information"
             ],
-            "retry_count": state["retry_count"],
+            "retry_count": state[
+                "retry_count"
+            ],
+            "discovery_iteration": (
+                current_iteration
+            ),
+            "max_discovery_iterations": (
+                MAX_DISCOVERY_ITERATIONS
+            ),
+            "remaining_discovery_iterations": (
+                remaining_iterations
+            ),
         },
     )
 
     # ======================================================
-    # Prepare structured LLM
+    # Prepare Structured LLM
     # ======================================================
 
     llm = get_llm()
@@ -106,7 +174,7 @@ async def discovery_node(
     )
 
     # ======================================================
-    # Build discovery prompt
+    # Build Discovery Prompt
     # ======================================================
 
     system_prompt = DISCOVERY_PROMPT.format(
@@ -120,6 +188,11 @@ async def discovery_node(
             indent=2,
         ),
         error=state["error"] or "None",
+
+        # Discovery budget information.
+        current_iteration=current_iteration,
+        max_iterations=MAX_DISCOVERY_ITERATIONS,
+        remaining_iterations=remaining_iterations,
     )
 
     messages = [
@@ -130,7 +203,7 @@ async def discovery_node(
     ]
 
     # ======================================================
-    # Ask discovery reasoner
+    # Ask Discovery Reasoner
     # ======================================================
 
     result = await discovery_llm.ainvoke(
@@ -138,7 +211,7 @@ async def discovery_node(
     )
 
     # ======================================================
-    # Discovery complete
+    # Discovery Complete
     # ======================================================
 
     if result.discovery_complete:
@@ -161,8 +234,21 @@ async def discovery_node(
                 "has been discovered."
             ),
             data={
-                "database_id": state["database_id"],
-                "table_count": len(tables),
+                "database_id": state[
+                    "database_id"
+                ],
+                "discovery_iteration": (
+                    current_iteration
+                ),
+                "max_discovery_iterations": (
+                    MAX_DISCOVERY_ITERATIONS
+                ),
+                "remaining_discovery_iterations": (
+                    remaining_iterations
+                ),
+                "table_count": len(
+                    tables
+                ),
                 "relationship_count": len(
                     relationships
                 ),
@@ -174,15 +260,30 @@ async def discovery_node(
 
         return {
             "active_loop": "discovery",
+
+            "discovery_iteration": (
+                current_iteration
+            ),
+
             "discovery_complete": True,
+
+            "discovery_exhausted": False,
+
             "candidate_sql": [],
-            "schema_update": result.schema_update,
+
+            "schema_update": (
+                result.schema_update
+            ),
+
             "error": None,
+
             "discovery_messages": [
                 AIMessage(
                     content=json.dumps(
                         {
                             "discovery_complete": True,
+                            "discovery_exhausted": False,
+                            "queries": [],
                             "schema_update": (
                                 result.schema_update
                             ),
@@ -194,7 +295,78 @@ async def discovery_node(
         }
 
     # ======================================================
-    # More discovery required
+    # Discovery Budget Exhausted
+    # ======================================================
+
+    if (
+        current_iteration
+        >= MAX_DISCOVERY_ITERATIONS
+    ):
+
+        emit(
+            component="discovery",
+            event="iteration_limit_reached",
+            message=(
+                "Discovery iteration limit reached. "
+                "Proceeding with available schema knowledge."
+            ),
+            data={
+                "database_id": state[
+                    "database_id"
+                ],
+                "discovery_iteration": (
+                    current_iteration
+                ),
+                "max_discovery_iterations": (
+                    MAX_DISCOVERY_ITERATIONS
+                ),
+                "remaining_discovery_iterations": 0,
+                "discarded_query_count": len(
+                    result.queries
+                ),
+                "retry_count": state[
+                    "retry_count"
+                ],
+            },
+        )
+
+        return {
+            "active_loop": "discovery",
+
+            "discovery_iteration": (
+                current_iteration
+            ),
+
+            # Discovery did not genuinely complete.
+            "discovery_complete": False,
+
+            # The discovery budget has instead been exhausted.
+            "discovery_exhausted": True,
+
+            # Do not execute another metadata query batch.
+            "candidate_sql": [],
+
+            # Do not persist incomplete schema knowledge.
+            "schema_update": {},
+
+            "error": None,
+
+            "discovery_messages": [
+                AIMessage(
+                    content=json.dumps(
+                        {
+                            "discovery_complete": False,
+                            "discovery_exhausted": True,
+                            "queries": [],
+                        },
+                        indent=2,
+                    )
+                )
+            ],
+        }
+
+    # ======================================================
+    # More Discovery Required
     # ======================================================
 
     emit(
@@ -205,7 +377,18 @@ async def discovery_node(
             "are required."
         ),
         data={
-            "database_id": state["database_id"],
+            "database_id": state[
+                "database_id"
+            ],
+            "discovery_iteration": (
+                current_iteration
+            ),
+            "max_discovery_iterations": (
+                MAX_DISCOVERY_ITERATIONS
+            ),
+            "remaining_discovery_iterations": (
+                remaining_iterations
+            ),
             "sql_queries": result.queries,
             "query_count": len(
                 result.queries
@@ -215,14 +398,25 @@ async def discovery_node(
 
     return {
         "active_loop": "discovery",
+
+        "discovery_iteration": (
+            current_iteration
+        ),
+
         "discovery_complete": False,
+
+        "discovery_exhausted": False,
+
         "candidate_sql": result.queries,
+
         "schema_update": {},
+
         "discovery_messages": [
             AIMessage(
                 content=json.dumps(
                     {
                         "discovery_complete": False,
+                        "discovery_exhausted": False,
                         "queries": result.queries,
                     },
                     indent=2,

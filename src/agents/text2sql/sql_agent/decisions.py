@@ -40,20 +40,40 @@ def route_after_discovery(
 ) -> Literal[
     "validator",
     "update_registry",
+    "sql_reasoner",
 ]:
     """
-    Decide whether discovery should continue through the
-    shared SQL execution pipeline or exit discovery.
+    Decide what happens after one discovery reasoning step.
 
-    Incomplete discovery produces candidate metadata SQL
-    that must be validated and executed.
+    Normal incomplete discovery produces candidate metadata SQL
+    that must pass through the shared execution pipeline.
 
-    Completed discovery proceeds to persistent registry
-    update before entering the SQL loop.
+    Successfully completed discovery proceeds through registry
+    update before entering the SQL reasoning loop.
+
+    If the discovery iteration budget has been exhausted,
+    discovery is stopped and execution proceeds directly to
+    the SQL reasoner using the schema knowledge currently
+    available.
     """
+
+    # ======================================================
+    # Discovery completed normally
+    # ======================================================
 
     if state["discovery_complete"]:
         return "update_registry"
+
+    # ======================================================
+    # Discovery budget exhausted
+    # ======================================================
+
+    if state["discovery_exhausted"]:
+        return "sql_reasoner"
+
+    # ======================================================
+    # More metadata discovery required
+    # ======================================================
 
     return "validator"
 
@@ -81,7 +101,9 @@ def route_after_validation(
     if state["sql_valid"]:
         return "executor"
 
-    return _active_reasoner(state)
+    return _active_reasoner(
+        state
+    )
 
 
 # ==========================================================
@@ -109,7 +131,9 @@ def route_after_execution(
     if state["error"] is None:
         return "verifier"
 
-    return _active_reasoner(state)
+    return _active_reasoner(
+        state
+    )
 
 
 # ==========================================================
@@ -133,7 +157,9 @@ def route_after_verification(
     verification error and can repair its next attempt.
     """
 
-    return _active_reasoner(state)
+    return _active_reasoner(
+        state
+    )
 
 
 # ==========================================================
@@ -172,7 +198,9 @@ def _active_reasoner(
     shared validator -> executor -> verifier pipeline.
     """
 
-    active_loop = state["active_loop"]
+    active_loop = state[
+        "active_loop"
+    ]
 
     if active_loop == "discovery":
         return "discovery"

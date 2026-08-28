@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-
-
 from operator import add
 from typing import Annotated, Any, Literal, TypedDict
 
@@ -50,6 +48,15 @@ class SQLAgentState(TypedDict):
     # information has been collected.
     discovery_complete: bool
 
+    # Number of times the discovery reasoner has been invoked
+    # during the current Text2SQL request.
+    #
+    # This is independent from retry_count. A successful
+    # discovery iteration is still an iteration even when no
+    # validation, execution, or verification failure occurs.
+    discovery_iteration: int
+    discovery_exhausted: bool
+
     # Newly discovered reusable knowledge waiting to be
     # persisted into the schema registry.
     schema_update: dict[str, Any]
@@ -73,8 +80,8 @@ class SQLAgentState(TypedDict):
     # Unlike execution_result, this does not contain
     # discovery-query results.
     sql_results: Annotated[
-    list[dict[str, Any]],
-    add,
+        list[dict[str, Any]],
+        add,
     ]
 
     # ======================================================
