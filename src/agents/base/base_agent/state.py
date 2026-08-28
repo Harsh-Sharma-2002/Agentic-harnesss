@@ -1,4 +1,4 @@
-# agentic_harness/harness/state.py
+# src/harness/state.py
 
 from __future__ import annotations
 
@@ -15,24 +15,27 @@ from langgraph.graph.message import add_messages
 
 class ExecutionContext(TypedDict):
     """
-    Routing decisions made by the Harness.
+    Routing decision produced by the orchestrator.
 
-    The orchestrator is responsible for populating this
-    exactly once before invoking the selected agent.
+    The orchestrator determines which available agent should
+    handle the current user request.
     """
 
+    # Short classification of the user's request.
+    # Useful for routing observability and debugging.
     intent: str | None
 
-    selected_agent: str | None
-
-    resource_type: Literal[
-        "database",
-        "web",
+    # Agent selected to handle the request.
+    #
+    # None means no routing decision has been made yet.
+    selected_agent: Literal[
+        "text2sql",
+        "web_search",
         "none",
-    ]
+    ] | None
 
-    resource_id: str | None
-
+    # Confidence assigned by the orchestrator to its
+    # routing decision.
     confidence: float | None
 
 
@@ -42,13 +45,16 @@ class ExecutionContext(TypedDict):
 
 class ExecutionRecord(TypedDict):
     """
-    Public execution record emitted by agents.
+    Public execution record emitted by harness components
+    and agents.
 
-    Agent internal state is intentionally hidden.
+    Agent-private state is intentionally excluded.
     """
 
+    # Component responsible for this execution step.
     agent: str
 
+    # Public description of the execution step.
     step: str
 
     status: Literal[
@@ -58,8 +64,10 @@ class ExecutionRecord(TypedDict):
         "INFO",
     ]
 
+    # Public result associated with this step.
     response: dict[str, Any]
 
+    # Additional structured observability information.
     metadata: dict[str, Any]
 
 
@@ -69,23 +77,29 @@ class ExecutionRecord(TypedDict):
 
 class GlobalState(TypedDict):
     """
-    Shared LangGraph state.
+    Shared state for one complete Harness invocation.
 
-    Every node receives this state and returns
-    an updated copy.
+    The Harness, orchestrator, and public agent adapters operate
+    on this state.
 
-    Only shared execution information belongs here.
-    Agent-specific implementation details remain private.
+    Agent-specific implementation details remain inside each
+    agent's private graph and private state.
     """
 
     # ======================================================
     # Request
     # ======================================================
 
+    # Unique identifier for the current request.
     request_id: str
 
+    # Original user request.
     user_query: str
 
+    # Shared conversation history.
+    #
+    # Kept at the harness level so future multi-turn behavior
+    # can reuse the same public conversation state.
     messages: Annotated[
         list[AnyMessage],
         add_messages,
@@ -95,14 +109,18 @@ class GlobalState(TypedDict):
     # Routing
     # ======================================================
 
+    # Routing decision populated by the orchestrator.
     execution: ExecutionContext
 
     # ======================================================
     # Response
     # ======================================================
 
+    # Final user-facing response produced by the selected
+    # agent or by the harness when no suitable agent exists.
     final_response: str | None
 
+    # Current lifecycle state of the complete request.
     status: Literal[
         "CREATED",
         "ROUTING",
@@ -111,12 +129,15 @@ class GlobalState(TypedDict):
         "FAILED",
     ]
 
+    # Latest public request-level error.
     error: str | None
 
     # ======================================================
     # Observability
     # ======================================================
 
+    # Public execution records accumulated across the
+    # orchestrator and selected agent.
     execution_log: Annotated[
         list[ExecutionRecord],
         add,
@@ -126,4 +147,8 @@ class GlobalState(TypedDict):
     # Additional Context
     # ======================================================
 
+    # Extensible request-level metadata.
+    #
+    # This should contain shared/public context only.
+    # Private agent implementation state does not belong here.
     metadata: dict[str, Any]

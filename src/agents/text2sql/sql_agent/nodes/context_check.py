@@ -1,4 +1,4 @@
-# src/agents/text2sql/sql_agent/nodes/context_check_node.py
+# src/agents/text2sql/sql_agent/nodes/context_check.py
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ import json
 from pydantic import BaseModel, Field
 
 from src.agents.core.call_llm import get_llm
-from src.agents.text2sql.sql_agent.nodes.prompts import CONTEXT_CHECK_PROMPT
+from src.agents.text2sql.sql_agent.nodes.prompts import (
+    CONTEXT_CHECK_PROMPT,
+)
 from src.agents.text2sql.sql_agent.state import SQLAgentState
+from src.core.events import emit
 
 
 class ContextDecision(BaseModel):
@@ -32,7 +35,9 @@ class ContextDecision(BaseModel):
     )
 
 
-async def context_check_node(state: SQLAgentState) -> dict:
+async def context_check_node(
+    state: SQLAgentState,
+) -> dict:
     """
     Determine whether the schema knowledge currently available
     in schema_context is sufficient to answer the user's query.
@@ -43,15 +48,54 @@ async def context_check_node(state: SQLAgentState) -> dict:
 
     schema_context = state["schema_context"]
 
-    # No persistent knowledge exists for this database yet.
-    # Discovery is therefore required without asking the LLM.
+    # ======================================================
+    # Context check started
+    # ======================================================
+
+    emit(
+        component="context_check",
+        event="check_started",
+        message="Checking whether cached schema context is sufficient.",
+        data={
+            "database_id": state["database_id"],
+        },
+    )
+
+    # ======================================================
+    # No cached context
+    # ======================================================
+
     if not schema_context:
+        missing_information = [
+            "Database schema is currently unknown."
+        ]
+
+        emit(
+            component="context_check",
+            event="discovery_required",
+            message="No cached schema context available. Discovery required.",
+            data={
+                "missing_information": missing_information,
+            },
+        )
+
         return {
             "context_sufficient": False,
-            "missing_information": [
-                "Database schema is currently unknown."
-            ],
+            "missing_information": missing_information,
         }
+
+    # ======================================================
+    # Ask LLM whether cached context is sufficient
+    # ======================================================
+
+    emit(
+        component="context_check",
+        event="llm_check_started",
+        message="Evaluating cached schema knowledge.",
+        data={
+            "database_id": state["database_id"],
+        },
+    )
 
     prompt = CONTEXT_CHECK_PROMPT.format(
         query=state["query"],
@@ -67,9 +111,43 @@ async def context_check_node(state: SQLAgentState) -> dict:
         ContextDecision
     )
 
-    decision = await structured_llm.ainvoke(prompt)
+    decision = await structured_llm.ainvoke(
+        prompt
+    )
+
+    # ======================================================
+    # Cached context is sufficient
+    # ======================================================
+
+    if decision.sufficient:
+        emit(
+            component="context_check",
+            event="context_sufficient",
+            message=(
+                "Cached schema context is sufficient. "
+                "Discovery will be skipped."
+            ),
+        )
+
+        return {
+            "context_sufficient": True,
+            "missing_information": [],
+        }
+
+    # ======================================================
+    # Additional discovery required
+    # ======================================================
+
+    emit(
+        component="context_check",
+        event="discovery_required",
+        message="Cached schema context is incomplete. Discovery required.",
+        data={
+            "missing_information": decision.missing_information,
+        },
+    )
 
     return {
-        "context_sufficient": decision.sufficient,
+        "context_sufficient": False,
         "missing_information": decision.missing_information,
     }

@@ -2,10 +2,14 @@
 
 from langchain_core.messages import HumanMessage
 
+from src.core.events import emit
+
 from ..state import SQLAgentState
 
 
-async def init_node(state: SQLAgentState) -> dict:
+async def init_node(
+    state: SQLAgentState,
+) -> dict:
     """
     Initialize request-scoped Text2SQL state.
 
@@ -13,15 +17,36 @@ async def init_node(state: SQLAgentState) -> dict:
     and SQL loops and resets all execution-specific fields.
     """
 
+    # ======================================================
+    # Emit initialization event
+    # ======================================================
+
+    emit(
+        component="text2sql",
+        event="request_initialized",
+        message="Text2SQL request initialized.",
+        data={
+            "database_id": state["database_id"],
+        },
+    )
+
+    # ======================================================
+    # Initialize private state
+    # ======================================================
+
     return {
         # Discovery loop memory
         "discovery_messages": [
-            HumanMessage(content=state["query"])
+            HumanMessage(
+                content=state["query"]
+            )
         ],
 
         # SQL loop memory
         "sql_messages": [
-            HumanMessage(content=state["query"])
+            HumanMessage(
+                content=state["query"]
+            )
         ],
 
         # Discovery state
@@ -30,6 +55,10 @@ async def init_node(state: SQLAgentState) -> dict:
         "missing_information": [],
         "discovery_complete": False,
         "schema_update": {},
+
+        # SQL loop state
+        "execution_complete": False,
+        "sql_results": [],
 
         # Shared SQL execution state
         "active_loop": None,
@@ -48,8 +77,4 @@ async def init_node(state: SQLAgentState) -> dict:
         # Output
         "response": None,
         "execution_records": [],
-
-        # SQL loop state
-        "execution_complete": False,
-        "sql_results": [],
     }

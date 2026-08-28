@@ -10,6 +10,14 @@
         "old_data_type": null,
         "new_data_type": "boolean"
       }
-    ]
+    ],
+    "description": "Database contains customer-related tables for storing and managing customer records",
+    "tables": {
+      "customers": {
+        "description": "Table containing customer information",
+        "schema": {}
+      }
+    },
+    "relationships": []
   }
 }
