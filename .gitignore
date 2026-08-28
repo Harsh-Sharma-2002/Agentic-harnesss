@@ -30,4 +30,5 @@ env/
 
 # Misc
 .coverage
+src/agents/text2sql/schema_registry.json
 context.json

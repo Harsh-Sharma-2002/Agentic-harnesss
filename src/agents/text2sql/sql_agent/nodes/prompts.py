@@ -124,7 +124,7 @@ USER REQUEST:
 KNOWN APPLICATION SCHEMA:
 {schema_context}
 
-MISSING INFORMATION:
+MISSING INFORMATION (hypothesis from a prior check — verify, do not assume):
 {missing_information}
 
 LATEST ERROR:
@@ -160,20 +160,58 @@ RULES:
    - perform metadata discovery only
    - be independent of other queries in the same batch.
 
+8. A noun or attribute mentioned in the user request (e.g. "state",
+   "category", "status") does NOT imply a separate table or a foreign
+   key relationship. It is very often just a plain column on a table
+   you already know about (e.g. customers.state as a text/varchar
+   value). Never assume a normalized table or FK exists for something
+   named in the request until you have actually queried the columns
+   of the relevant table and confirmed it is not a plain column.
+
+9. MISSING INFORMATION above is a hypothesis produced by an earlier,
+   less-informed check. It is not guaranteed to be accurate. Your job
+   this turn is to verify each item against the actual catalog, not
+   to blindly satisfy it. If a discovery query already run in this
+   conversation's history answers a "missing information" item —
+   including by proving the thing does NOT exist — treat that item as
+   RESOLVED, not as still outstanding.
+
+10. Absence is a valid discovery result. If you queried
+    information_schema.columns for a table and got back its full
+    column list, you now know everything about that table's columns
+    — do not ask for them again. If you queried pg_catalog / 
+    information_schema for foreign keys involving a table and the
+    result set was empty, that means no foreign key exists — this is
+    a completed, successful discovery outcome, not a failure to
+    retry. Only continue searching for a relationship if you have NOT
+    yet actually run a query capable of revealing it.
+
+11. Before generating new queries, re-read the results already present
+    in the conversation history. If they already contain the full
+    column list for every table relevant to the request, and any
+    join/relationship questions have already been checked (found or
+    ruled out), discovery is complete — set discovery_complete=true
+    even if it turns out the request needs no join at all.
+
 DECISION:
 
-If more schema information is required:
+If more schema information is required, AND you have not already run a
+query in this conversation capable of answering it:
 - discovery_complete=false
 - queries must contain the smallest useful metadata query batch
 - schema_update={{}}
 
-If enough schema information has been discovered:
+If enough schema information has been discovered — including cases
+where you've confirmed a suspected table/relationship does NOT exist:
 - discovery_complete=true
 - queries=[]
-- schema_update must contain the newly learned reusable APPLICATION schema.
+- schema_update must contain the newly learned reusable APPLICATION schema,
+  reflecting only what was actually observed (do not include relationships
+  that were checked and found not to exist).
 
-Never set discovery_complete=true while required table columns or required
-join relationships remain unknown.
+Do not set discovery_complete=false solely because an earlier hypothesis
+in MISSING INFORMATION hasn't been "satisfied" — satisfy it by checking,
+and a confirmed negative counts as satisfied.
 
 SCHEMA_UPDATE CONTRACT:
 
@@ -226,7 +264,6 @@ No explanation.
 No commentary.
 No fields other than those defined by DiscoveryDecision.
 """
-
 
 # ==========================================================
 # SQL Reasoner
