@@ -1,21 +1,18 @@
 {
   "ecommerce": {
-    "table": "pg_stat_all_tables",
-    "columns_updated": [
-      "typbyval"
-    ],
-    "data_type_changes": [
-      {
-        "column_name": "typbyval",
-        "old_data_type": null,
-        "new_data_type": "boolean"
-      }
-    ],
-    "description": "Database contains customer-related tables for storing and managing customer records",
+    "description": "E-commerce application database",
     "tables": {
       "customers": {
-        "description": "Table containing customer information",
-        "schema": {}
+        "description": "Table containing customer records",
+        "schema": {
+          "customer_id": {
+            "type": "integer",
+            "nullable": false,
+            "primary_key": true,
+            "foreign_key": false,
+            "description": "Unique identifier for a customer"
+          }
+        }
       }
     },
     "relationships": []

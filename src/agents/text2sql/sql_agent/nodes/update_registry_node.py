@@ -15,6 +15,10 @@ REGISTRY_PATH = (
 )
 
 
+# ==========================================================
+# Registry Merge
+# ==========================================================
+
 def _deep_merge(
     existing: dict[str, Any],
     update: dict[str, Any],
@@ -24,7 +28,9 @@ def _deep_merge(
     into existing registry knowledge.
 
     Dictionaries are recursively merged.
+
     Lists are extended without duplicate entries.
+
     New scalar values replace old scalar values.
     """
 
@@ -59,12 +65,65 @@ def _deep_merge(
     return merged
 
 
+# ==========================================================
+# SQL Loop Transition
+# ==========================================================
+
+def _sql_loop_transition(
+    schema_context: dict[str, Any],
+) -> dict:
+    """
+    Build the state update required to leave discovery
+    and enter the SQL reasoning loop.
+
+    This transition is shared by both:
+
+    1. Discovery that produced new persistent knowledge.
+    2. Discovery that completed without learning anything new.
+    """
+
+    return {
+        # Schema knowledge available to SQL reasoning.
+        "schema_context": schema_context,
+
+        # Discovery is complete.
+        "discovery_complete": True,
+
+        # Nothing remains waiting for persistence.
+        "schema_update": {},
+
+        # Transfer execution ownership to SQL reasoning.
+        "active_loop": "sql",
+
+        # Reset the shared execution pipeline before the
+        # SQL reasoning loop begins.
+        "candidate_sql": [],
+        "sql_valid": False,
+        "execution_result": [],
+        "verified": False,
+
+        # Discovery errors/retries should not leak into the
+        # user-facing SQL execution loop.
+        "error": None,
+        "retry_count": 0,
+    }
+
+
+# ==========================================================
+# Registry Update Node
+# ==========================================================
+
 def update_registry_node(
     state: SQLAgentState,
 ) -> dict:
     """
     Persist completed discovery knowledge and transition
     execution from the discovery loop to the SQL loop.
+
+    Discovery may legitimately complete without producing new
+    reusable schema knowledge. In that case, the registry is
+    left unchanged and execution proceeds directly to the
+    SQL reasoning loop.
 
     This node performs no LLM reasoning.
     """
@@ -80,9 +139,18 @@ def update_registry_node(
 
     schema_update = state["schema_update"]
 
+    # ======================================================
+    # No new schema knowledge
+    # ======================================================
+
     if not schema_update:
-        raise ValueError(
-            "Discovery completed without producing schema knowledge."
+        # Discovery determined that execution can proceed,
+        # but nothing new needs to be persisted.
+        #
+        # Preserve the schema context already available to
+        # this invocation and enter the SQL reasoning loop.
+        return _sql_loop_transition(
+            state["schema_context"]
         )
 
     database_id = state["database_id"]
@@ -97,17 +165,22 @@ def update_registry_node(
             encoding="utf-8",
         ) as file:
             registry = json.load(file)
+
     else:
         registry = {}
 
     # ======================================================
-    # Merge knowledge
+    # Load existing database knowledge
     # ======================================================
 
     existing_context = registry.get(
         database_id,
         {},
     )
+
+    # ======================================================
+    # Merge newly discovered knowledge
+    # ======================================================
 
     merged_context = _deep_merge(
         existing_context,
@@ -135,23 +208,6 @@ def update_registry_node(
     # Exit discovery / enter SQL loop
     # ======================================================
 
-    return {
-        # Make newly learned knowledge immediately available
-        # to the SQL reasoning loop.
-        "schema_context": merged_context,
-
-        # Discovery is finished.
-        "discovery_complete": True,
-        "schema_update": {},
-
-        # Hand execution ownership to the SQL loop.
-        "active_loop": "sql",
-
-        # Reset shared pipeline state before SQL reasoning.
-        "candidate_sql": [],
-        "sql_valid": False,
-        "execution_result": [],
-        "verified": False,
-        "error": None,
-        "retry_count": 0,
-    }
+    return _sql_loop_transition(
+        merged_context
+    )
