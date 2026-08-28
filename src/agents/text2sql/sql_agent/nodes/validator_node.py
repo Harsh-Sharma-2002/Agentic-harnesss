@@ -5,7 +5,12 @@ from __future__ import annotations
 from langchain_core.messages import SystemMessage
 
 from src.agents.text2sql.sql_agent.state import SQLAgentState
+from src.core.events import emit
 
+
+# ==========================================================
+# Validation Configuration
+# ==========================================================
 
 FORBIDDEN_KEYWORDS = {
     "insert",
@@ -28,6 +33,10 @@ LOOP_MESSAGE_FIELDS = {
 }
 
 
+# ==========================================================
+# Validation Failure
+# ==========================================================
+
 def _validation_failure(
     state: SQLAgentState,
     error: str,
@@ -36,6 +45,7 @@ def _validation_failure(
     Build a validation failure update.
 
     Validation remains shared between both loops.
+
     active_loop is used only to place feedback into
     the correct short-term memory.
     """
@@ -47,19 +57,46 @@ def _validation_failure(
             f"Invalid active_loop for SQL validation: {active_loop}"
         )
 
-    message_field = LOOP_MESSAGE_FIELDS[active_loop]
+    message_field = LOOP_MESSAGE_FIELDS[
+        active_loop
+    ]
+
+    # ======================================================
+    # Emit validation failure
+    # ======================================================
+
+    emit(
+        component="validator",
+        event="validation_failed",
+        message="SQL validation failed.",
+        data={
+            "active_loop": active_loop,
+            "error": error,
+            "retry_count": (
+                state["retry_count"] + 1
+            ),
+        },
+    )
 
     return {
         "sql_valid": False,
         "error": error,
-        "retry_count": state["retry_count"] + 1,
+        "retry_count": (
+            state["retry_count"] + 1
+        ),
         message_field: [
             SystemMessage(
-                content=f"SQL validation failed: {error}"
+                content=(
+                    f"SQL validation failed: {error}"
+                )
             )
         ],
     }
 
+
+# ==========================================================
+# Single Query Validation
+# ==========================================================
 
 def _validate_single_query(
     query: str,
@@ -73,15 +110,21 @@ def _validate_single_query(
     """
 
     if not query or not query.strip():
-        return f"Query {index} is empty."
+        return (
+            f"Query {index} is empty."
+        )
 
-    normalized_sql = query.strip().lower()
+    normalized_sql = (
+        query.strip().lower()
+    )
 
     # ------------------------------------------------------
     # Read-only queries only
     # ------------------------------------------------------
 
-    if not normalized_sql.startswith("select"):
+    if not normalized_sql.startswith(
+        "select"
+    ):
         return (
             f"Query {index} is not read-only. "
             "Only SELECT queries are allowed."
@@ -120,11 +163,17 @@ def _validate_single_query(
     if forbidden:
         return (
             f"Query {index} contains forbidden SQL operations: "
-            + ", ".join(sorted(forbidden))
+            + ", ".join(
+                sorted(forbidden)
+            )
         )
 
     return None
 
+
+# ==========================================================
+# Validator Node
+# ==========================================================
 
 async def sql_validator_node(
     state: SQLAgentState,
@@ -139,7 +188,26 @@ async def sql_validator_node(
     any query in the batch is allowed to execute.
     """
 
-    candidate_queries = state["candidate_sql"]
+    candidate_queries = state[
+        "candidate_sql"
+    ]
+
+    # ======================================================
+    # Validation started
+    # ======================================================
+
+    emit(
+        component="validator",
+        event="validation_started",
+        message="Validating SQL query batch.",
+        data={
+            "active_loop": state["active_loop"],
+            "sql_queries": candidate_queries,
+            "query_count": len(
+                candidate_queries
+            ),
+        },
+    )
 
     # ======================================================
     # Batch must contain at least one query
@@ -173,6 +241,18 @@ async def sql_validator_node(
     # ======================================================
     # Entire batch passed validation
     # ======================================================
+
+    emit(
+        component="validator",
+        event="validation_passed",
+        message="SQL validation passed.",
+        data={
+            "active_loop": state["active_loop"],
+            "query_count": len(
+                candidate_queries
+            ),
+        },
+    )
 
     return {
         "sql_valid": True,

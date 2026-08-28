@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agents.text2sql.sql_agent.state import SQLAgentState
+from src.core.events import emit
 
 
 REGISTRY_PATH = (
@@ -137,13 +138,47 @@ def update_registry_node(
             "Registry update attempted before discovery completed."
         )
 
-    schema_update = state["schema_update"]
+    schema_update = state[
+        "schema_update"
+    ]
+
+    database_id = state[
+        "database_id"
+    ]
+
+    # ======================================================
+    # Registry update started
+    # ======================================================
+
+    emit(
+        component="registry",
+        event="update_started",
+        message="Processing discovered schema knowledge.",
+        data={
+            "database_id": database_id,
+            "schema_update_available": bool(
+                schema_update
+            ),
+        },
+    )
 
     # ======================================================
     # No new schema knowledge
     # ======================================================
 
     if not schema_update:
+
+        emit(
+            component="registry",
+            event="update_skipped",
+            message=(
+                "No new schema knowledge requires persistence."
+            ),
+            data={
+                "database_id": database_id,
+            },
+        )
+
         # Discovery determined that execution can proceed,
         # but nothing new needs to be persisted.
         #
@@ -153,18 +188,19 @@ def update_registry_node(
             state["schema_context"]
         )
 
-    database_id = state["database_id"]
-
     # ======================================================
     # Load registry
     # ======================================================
 
     if REGISTRY_PATH.exists():
+
         with REGISTRY_PATH.open(
             "r",
             encoding="utf-8",
         ) as file:
-            registry = json.load(file)
+            registry = json.load(
+                file
+            )
 
     else:
         registry = {}
@@ -187,7 +223,9 @@ def update_registry_node(
         schema_update,
     )
 
-    registry[database_id] = merged_context
+    registry[
+        database_id
+    ] = merged_context
 
     # ======================================================
     # Persist registry
@@ -197,12 +235,42 @@ def update_registry_node(
         "w",
         encoding="utf-8",
     ) as file:
+
         json.dump(
             registry,
             file,
             indent=2,
             ensure_ascii=False,
         )
+
+    # ======================================================
+    # Registry update completed
+    # ======================================================
+
+    tables = merged_context.get(
+        "tables",
+        {},
+    )
+
+    relationships = merged_context.get(
+        "relationships",
+        [],
+    )
+
+    emit(
+        component="registry",
+        event="update_completed",
+        message="Schema registry updated successfully.",
+        data={
+            "database_id": database_id,
+            "table_count": len(
+                tables
+            ),
+            "relationship_count": len(
+                relationships
+            ),
+        },
+    )
 
     # ======================================================
     # Exit discovery / enter SQL loop

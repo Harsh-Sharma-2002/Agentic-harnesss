@@ -9,7 +9,12 @@ from langchain_core.messages import SystemMessage
 
 from src.agents.text2sql.sql_agent.state import SQLAgentState
 from src.agents.text2sql.sql_agent.tools import run_sql
+from src.core.events import emit
 
+
+# ==========================================================
+# Loop Message Mapping
+# ==========================================================
 
 # Maps the active reasoning loop to its
 # corresponding short-term memory.
@@ -18,6 +23,10 @@ LOOP_MESSAGE_FIELDS = {
     "sql": "sql_messages",
 }
 
+
+# ==========================================================
+# Executor Node
+# ==========================================================
 
 async def executor_node(
     state: SQLAgentState,
@@ -35,7 +44,9 @@ async def executor_node(
     only after deterministic verification succeeds.
     """
 
-    candidate_queries = state["candidate_sql"]
+    candidate_queries = state[
+        "candidate_sql"
+    ]
 
     # ======================================================
     # Preconditions
@@ -51,14 +62,38 @@ async def executor_node(
             "Executor received an empty SQL batch."
         )
 
-    active_loop = state["active_loop"]
+    active_loop = state[
+        "active_loop"
+    ]
 
     if active_loop not in LOOP_MESSAGE_FIELDS:
         raise ValueError(
             f"Invalid active_loop for SQL execution: {active_loop}"
         )
 
-    message_field = LOOP_MESSAGE_FIELDS[active_loop]
+    message_field = LOOP_MESSAGE_FIELDS[
+        active_loop
+    ]
+
+    # ======================================================
+    # Execution started
+    # ======================================================
+
+    emit(
+        component="executor",
+        event="execution_started",
+        message="Executing SQL query batch.",
+        data={
+            "active_loop": active_loop,
+            "sql_queries": candidate_queries,
+            "query_count": len(
+                candidate_queries
+            ),
+            "retry_count": state[
+                "retry_count"
+            ],
+        },
+    )
 
     # ======================================================
     # Execute independent queries concurrently
@@ -66,9 +101,11 @@ async def executor_node(
 
     results = await asyncio.gather(
         *[
-            run_sql.ainvoke({
-                "query": query,
-            })
+            run_sql.ainvoke(
+                {
+                    "query": query,
+                }
+            )
             for query in candidate_queries
         ]
     )
@@ -104,13 +141,39 @@ async def executor_node(
             for item in failed_queries
         )
 
+        # ==================================================
+        # Execution failed
+        # ==================================================
+
+        emit(
+            component="executor",
+            event="execution_failed",
+            message="SQL execution failed.",
+            data={
+                "active_loop": active_loop,
+                "query_count": len(
+                    candidate_queries
+                ),
+                "failed_query_count": len(
+                    failed_queries
+                ),
+                "error": error,
+                "retry_count": (
+                    state["retry_count"] + 1
+                ),
+            },
+        )
+
         return {
             # Preserve the latest attempted batch for
             # debugging and inspection.
             "execution_result": execution_results,
 
             "error": error,
-            "retry_count": state["retry_count"] + 1,
+
+            "retry_count": (
+                state["retry_count"] + 1
+            ),
 
             # Feed the execution failure back into the
             # reasoning loop that generated the SQL.
@@ -127,6 +190,29 @@ async def executor_node(
     # ======================================================
     # Execution succeeded
     # ======================================================
+
+    row_counts = [
+        item["result"]["row_count"]
+        for item in execution_results
+    ]
+
+    total_rows = sum(
+        row_counts
+    )
+
+    emit(
+        component="executor",
+        event="execution_completed",
+        message="SQL execution completed.",
+        data={
+            "active_loop": active_loop,
+            "query_count": len(
+                candidate_queries
+            ),
+            "row_count": total_rows,
+            "row_counts": row_counts,
+        },
+    )
 
     return {
         # Latest successfully executed batch.

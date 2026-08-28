@@ -9,9 +9,16 @@ from langchain_core.messages import AIMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from src.agents.core.call_llm import get_llm
-from src.agents.text2sql.sql_agent.nodes.prompts import DISCOVERY_PROMPT
+from src.agents.text2sql.sql_agent.nodes.prompts import (
+    DISCOVERY_PROMPT,
+)
 from src.agents.text2sql.sql_agent.state import SQLAgentState
+from src.core.events import emit
 
+
+# ==========================================================
+# Structured Discovery Decision
+# ==========================================================
 
 class DiscoveryDecision(BaseModel):
     """
@@ -48,6 +55,10 @@ class DiscoveryDecision(BaseModel):
     )
 
 
+# ==========================================================
+# Discovery Node
+# ==========================================================
+
 async def discovery_node(
     state: SQLAgentState,
 ) -> dict:
@@ -67,11 +78,36 @@ async def discovery_node(
     schema registry itself.
     """
 
+    # ======================================================
+    # Discovery reasoning started
+    # ======================================================
+
+    emit(
+        component="discovery",
+        event="reasoning_started",
+        message="Evaluating missing database schema knowledge.",
+        data={
+            "database_id": state["database_id"],
+            "missing_information": state[
+                "missing_information"
+            ],
+            "retry_count": state["retry_count"],
+        },
+    )
+
+    # ======================================================
+    # Prepare structured LLM
+    # ======================================================
+
     llm = get_llm()
 
     discovery_llm = llm.with_structured_output(
         DiscoveryDecision
     )
+
+    # ======================================================
+    # Build discovery prompt
+    # ======================================================
 
     system_prompt = DISCOVERY_PROMPT.format(
         query=state["query"],
@@ -87,17 +123,55 @@ async def discovery_node(
     )
 
     messages = [
-        SystemMessage(content=system_prompt),
+        SystemMessage(
+            content=system_prompt
+        ),
         *state["discovery_messages"],
     ]
 
-    result = await discovery_llm.ainvoke(messages)
+    # ======================================================
+    # Ask discovery reasoner
+    # ======================================================
+
+    result = await discovery_llm.ainvoke(
+        messages
+    )
 
     # ======================================================
     # Discovery complete
     # ======================================================
 
     if result.discovery_complete:
+
+        tables = result.schema_update.get(
+            "tables",
+            {},
+        )
+
+        relationships = result.schema_update.get(
+            "relationships",
+            [],
+        )
+
+        emit(
+            component="discovery",
+            event="discovery_completed",
+            message=(
+                "Required database schema knowledge "
+                "has been discovered."
+            ),
+            data={
+                "database_id": state["database_id"],
+                "table_count": len(tables),
+                "relationship_count": len(
+                    relationships
+                ),
+                "schema_update_available": bool(
+                    result.schema_update
+                ),
+            },
+        )
+
         return {
             "active_loop": "discovery",
             "discovery_complete": True,
@@ -109,7 +183,9 @@ async def discovery_node(
                     content=json.dumps(
                         {
                             "discovery_complete": True,
-                            "schema_update": result.schema_update,
+                            "schema_update": (
+                                result.schema_update
+                            ),
                         },
                         indent=2,
                     )
@@ -120,6 +196,22 @@ async def discovery_node(
     # ======================================================
     # More discovery required
     # ======================================================
+
+    emit(
+        component="discovery",
+        event="queries_generated",
+        message=(
+            "Additional schema discovery queries "
+            "are required."
+        ),
+        data={
+            "database_id": state["database_id"],
+            "sql_queries": result.queries,
+            "query_count": len(
+                result.queries
+            ),
+        },
+    )
 
     return {
         "active_loop": "discovery",
