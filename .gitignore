@@ -27,6 +27,7 @@ env/
 
 # LangSmith
 .langsmith/
+.env
 
 # Misc
 .coverage

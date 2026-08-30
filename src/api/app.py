@@ -2,6 +2,31 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+# ==========================================================
+# Environment
+# ==========================================================
+
+# Resolve the repository root independently of the process
+# working directory.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# Environment configuration must be loaded before importing
+# routers, graphs, LLM clients, or other LangChain components.
+load_dotenv(
+    dotenv_path=PROJECT_ROOT / ".env",
+    override=False,
+)
+
+
+# ==========================================================
+# Imports
+# ==========================================================
+
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 

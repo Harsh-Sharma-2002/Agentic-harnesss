@@ -19,3 +19,18 @@ Wrap agent invocations in handoff_node with try/except that degrades to a clean 
 Add asyncio.wait_for timeouts around your test ainvoke calls so nothing hangs silently during a demo or grading run.
 Fill in api/app.py + routes/query.py minimally — even a bare FastAPI wrapper around base_agent_graph.ainvoke — since this is the difference between "I can run scripts" and "this is a service."
 Leave observer/langsmith.py and multi-database support alone — not worth the time this week, and it's fine to say "designed for but not yet implemented" if asked.
+
+
+Sample prompts:
+
+1. How many customers are in the database?
+
+2. Which states have the most customers?
+   Show the top 5 in descending order.
+
+3. Which 5 customers have placed the most orders,
+   and how many orders has each customer placed?
+
+4. What are the latest developments in agentic AI?
+
+5. Write me a Python implementation of merge sort.
