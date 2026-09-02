@@ -58,7 +58,7 @@ configured.
 
 ### Linux
 
-Open your distribution's terminal applicati
+Open your distribution's terminal application
 The setup script is intended to be run with Bash.
 
 ------------------------------------------------------------------------
@@ -76,7 +76,7 @@ cd ~/Desktop
 Clone the repository:
 
 ``` bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/Harsh-Sharma-2002/Agentic-harnesss
 ```
 
 Replace `<REPOSITORY_URL>` with the GitHub repository URL provided for
