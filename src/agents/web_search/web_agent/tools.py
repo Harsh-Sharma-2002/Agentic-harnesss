@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 
 from langchain_core.tools import tool
-from ddgs import DDGS
+from ddgs import DDGS ### Web Search Query
 
 
 @tool
