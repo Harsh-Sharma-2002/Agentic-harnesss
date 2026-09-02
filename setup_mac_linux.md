@@ -1115,3 +1115,7 @@ Before running the full Agent Harness, verify:
 Once all required items are complete, the macOS/Linux environment is
 ready for the Agent Harness.
 
+
+
+ streamlit run ui/streamlit_app.py    
+  uvicorn src.api.app:app --reload   
