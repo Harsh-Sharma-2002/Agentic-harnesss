@@ -80,7 +80,7 @@ git clone https://github.com/Harsh-Sharma-2002/Agentic-harnesss
 ```
 
 Replace `<REPOSITORY_URL>` with the GitHub repository URL provided for
-the course.
+the course. (https://github.com/Harsh-Sharma-2002/Agentic-harnesss)
 
 Enter the repository:
 
