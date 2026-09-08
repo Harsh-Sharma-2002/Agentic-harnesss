@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:17
+
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: student_user
+      POSTGRES_PASSWORD: student_dev
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - ./data/ecommerce.sql:/docker-entrypoint-initdb.d/01-ecommerce.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student_user -d ecommerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
