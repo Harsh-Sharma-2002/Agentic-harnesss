@@ -5,8 +5,8 @@ This is the primary setup path for running the **Agent Harness**. It requires on
 ## 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd Agent_Harness
+git clone https://github.com/Harsh-Sharma-2002/Agentic-harnesss.git
+cd Agentic-harnesss
 ```
 
 ## 2. Run the stack
