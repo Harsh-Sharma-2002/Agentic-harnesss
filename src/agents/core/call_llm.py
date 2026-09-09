@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from langchain_ollama import ChatOllama
@@ -27,7 +28,9 @@ class StructuredLLMWrapper:
     Existing agent code can continue using:
 
         llm = get_llm()
+
         structured_llm = llm.with_structured_output(MySchema)
+
         result = await structured_llm.ainvoke(...)
 
     without implementing retry behavior inside individual nodes.
@@ -144,6 +147,7 @@ class StructuredLLMWrapper:
                 last_error = RuntimeError(
                     "Model returned empty structured output."
                 )
+
                 failure_reason = (
                     "empty_structured_output"
                 )
@@ -153,6 +157,7 @@ class StructuredLLMWrapper:
                     "Model returned structured output "
                     "that could not be parsed."
                 )
+
                 failure_reason = (
                     "unparsed_structured_output"
                 )
@@ -274,7 +279,14 @@ class SharedLLM:
 # ==========================================================
 
 _chat_llm = ChatOllama(
-    model="qwen3.5:4b",
+    model=os.getenv(
+        "LLM_MODEL",
+        "qwen3.5:4b",
+    ),
+    base_url=os.getenv(
+        "OLLAMA_BASE_URL",
+        "http://localhost:11434",
+    ),
     temperature=0,
 
     # Do not spend large reasoning budgets on small
@@ -288,6 +300,7 @@ _chat_llm = ChatOllama(
     # Text2SQL prompts include schema and execution history.
     num_ctx=8192,
 )
+
 _llm = SharedLLM(
     _chat_llm
 )

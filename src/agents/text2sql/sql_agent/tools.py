@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+import os
 
 import psycopg
 from langchain_core.tools import tool
 
 
 DATABASE_CONFIG = {
-    "dbname": "ecommerce",
-    "user": "harshsharma",
-    "host": "localhost",
-    "port": 5432,
+    "dbname": os.getenv("DATABASE_NAME", "ecommerce"),
+    "user": os.getenv("DATABASE_USER", "student_user"),
+    "password": os.getenv("DATABASE_PASSWORD", "student_dev"),
+    "host": os.getenv("DATABASE_HOST", "localhost"),
+    "port": int(os.getenv("DATABASE_PORT", "5432")),
 }
 
 

@@ -49,4 +49,4 @@ python-dotenv
 # Web Search
 # ==========================================================
 
-duckduckgo-search
+ddgs

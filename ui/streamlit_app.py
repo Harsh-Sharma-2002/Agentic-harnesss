@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
+
 from typing import Any
 
 import httpx
 import streamlit as st
+import os
 
 
 # ==========================================================
@@ -14,7 +15,7 @@ import streamlit as st
 # ==========================================================
 
 API_BASE_URL = os.getenv(
-    "AGENT_HARNESS_API_URL",
+    "API_BASE_URL",
     "http://127.0.0.1:8000",
 )
 
