@@ -1,5 +1,7 @@
 # Agent Harness --- Windows Setup Guide
 
+> Most users should follow [DOCKER_SETUP.md](DOCKER_SETUP.md) instead — this guide is for running the harness without Docker.
+
 This guide walks through the complete Windows setup for the **Agent
 Harness**.
 

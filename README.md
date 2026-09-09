@@ -640,31 +640,19 @@ Agent_Harness/
 
 # Setup
 
-## 1. Clone the repository
+The recommended way to run Agent Harness is with Docker — no local Python, PostgreSQL, or Ollama installation required.
+
+See [DOCKER_SETUP.md](DOCKER_SETUP.md) for the full walkthrough:
 
 ```bash
 git clone <repository-url>
 cd Agent_Harness
+docker compose up --build
 ```
 
-## 2. Create a virtual environment
+Then open [http://localhost:8501](http://localhost:8501) for the UI or [http://localhost:8000/health](http://localhost:8000/health) for the API.
 
-```bash
-python -m venv venv
-source venv/bin/activate
-```
-
-Windows:
-
-```bash
-venv\Scripts\activate
-```
-
-## 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
+To run the harness without Docker instead, see [ADVANCED_LOCAL_SETUP.md](ADVANCED_LOCAL_SETUP.md) (macOS/Linux) or [WINDOWS_LOCAL_SETUP.md](WINDOWS_LOCAL_SETUP.md) (Windows).
 
 ---
 
