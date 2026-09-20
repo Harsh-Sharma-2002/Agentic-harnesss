@@ -678,6 +678,13 @@ account for normal Text2SQL execution.
 
 Use a dedicated local project database account.
 
+Native runs and Docker runs use separate env files, so their database
+config never has to match: Docker mode reads `.env` (created from
+`.env.example`, unchanged from the Docker walkthrough) and starts its
+own Postgres container on port 5433. A native run reads `.env.local`
+(created from `.env.local.example`) and talks to the Postgres install
+on your machine, normally on its default port 5432.
+
 Recommended local development values:
 
 ``` dotenv
@@ -724,9 +731,10 @@ to the schemas, tables, and operations the agent actually requires.
 
 ------------------------------------------------------------------------
 
-## 27. Final `.env` Shape
+## 27. Final `.env.local` Shape
 
-Your `.env` should eventually contain values similar to:
+Your `.env.local` (copied from `.env.local.example`, at the repo root)
+should eventually contain values similar to:
 
 ``` dotenv
 # ==========================================================
@@ -758,6 +766,9 @@ DATABASE_PASSWORD=agent_harness_dev
 ```
 
 Replace placeholders with the values specified for the course/project.
+
+This file is only read by native runs. It is never used by
+`docker compose up`, which continues to read `.env` as before.
 
 ------------------------------------------------------------------------
 
