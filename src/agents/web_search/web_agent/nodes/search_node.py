@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from src.agents.core.call_llm import get_llm
@@ -21,6 +24,20 @@ class SearchDecision(BaseModel):
             "A concise web search query optimized to retrieve "
             "information needed to answer the user's request."
         )
+    )
+
+    timelimit: Literal["d", "w", "m", "y"] | None = Field(
+        default="y",
+        description=(
+            "How far back search results may go, relative to "
+            "today. Use 'd' for breaking/today's news, 'w' for "
+            "this week, 'm' for recent developments, 'y' for "
+            "anything current but not urgent. Use null only when "
+            "the request is about timeless or historical "
+            "information (definitions, how something works, "
+            "events with a fixed past date) where recency does "
+            "not matter. When unsure, prefer 'y' over null."
+        ),
     )
 
 
@@ -51,15 +68,20 @@ async def search_node(
         SearchDecision
     )
 
+    today: date = datetime.now(timezone.utc).date()
+
     decision = await search_llm.ainvoke(
         (
-            "Convert the following user request into one concise "
-            "web search query. Return only the structured output.\n\n"
+            f"Today's date is {today.isoformat()}. Convert the "
+            "following user request into one concise web search "
+            "query, and choose how far back results may go. "
+            "Return only the structured output.\n\n"
             f"User request:\n{state['query']}"
         )
     )
 
     search_query = decision.search_query.strip()
+    timelimit = decision.timelimit
 
     if not search_query:
         raise ValueError(
@@ -72,6 +94,7 @@ async def search_node(
         message="Web search query generated.",
         data={
             "query": search_query,
+            "timelimit": timelimit,
         },
     )
 
@@ -85,12 +108,14 @@ async def search_node(
         message="Searching the web.",
         data={
             "query": search_query,
+            "timelimit": timelimit,
         },
     )
 
     result = await web_search.ainvoke(
         {
             "query": search_query,
+            "timelimit": timelimit,
         }
     )
 
