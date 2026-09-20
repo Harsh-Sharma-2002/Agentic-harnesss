@@ -12,9 +12,16 @@ from ddgs import DDGS ### Web Search Query
 @tool
 async def web_search(
     query: str,
+    timelimit: str | None = None,
 ) -> dict[str, Any]:
     """
     Search the web for information relevant to the given query.
+
+    Args:
+        query: The search query.
+        timelimit: Restrict results by recency. One of "d" (past
+            day), "w" (past week), "m" (past month), "y" (past
+            year), or None for no recency restriction.
 
     Returns a small set of search results containing titles,
     URLs, and text snippets.
@@ -26,6 +33,7 @@ async def web_search(
                 DDGS().text(
                     query,
                     max_results=5,
+                    timelimit=timelimit,
                 )
             )
 
