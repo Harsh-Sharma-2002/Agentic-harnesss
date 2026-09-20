@@ -17,8 +17,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Environment configuration must be loaded before importing
 # routers, graphs, LLM clients, or other LangChain components.
+#
+# Native (non-Docker) runs use .env.local when present, so a local
+# Postgres install doesn't have to share config with Docker mode.
+# Under Docker, docker-compose injects real environment variables
+# directly into the container and .env.local is never present there
+# (excluded via .dockerignore), so this always falls through to the
+# .env values docker-compose itself derives from.
+_LOCAL_ENV_PATH = PROJECT_ROOT / ".env.local"
+_DOCKER_ENV_PATH = PROJECT_ROOT / ".env"
+
 load_dotenv(
-    dotenv_path=PROJECT_ROOT / ".env",
+    dotenv_path=_LOCAL_ENV_PATH if _LOCAL_ENV_PATH.exists() else _DOCKER_ENV_PATH,
     override=False,
 )
 
