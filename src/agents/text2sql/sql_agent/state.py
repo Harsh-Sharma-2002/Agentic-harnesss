@@ -36,7 +36,7 @@ class SQLAgentState(TypedDict):
     ]
 
     # Cached database knowledge relevant to this request.
-    schema_context: dict[str, Any]
+    schema_context: dict[str, Any] 
 
     # Result of the initial registry-context sufficiency check.
     context_sufficient: bool

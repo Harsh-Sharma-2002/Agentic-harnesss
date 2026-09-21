@@ -30,9 +30,7 @@ async def run_sql(query: str) -> dict[str, Any]:
 
     def _execute() -> dict[str, Any]:
         try:
-            with psycopg.connect(
-                **DATABASE_CONFIG
-            ) as connection:
+            with psycopg.connect(**DATABASE_CONFIG) as connection:
 
                 # Defense in depth.
                 # Even if application validation fails,
