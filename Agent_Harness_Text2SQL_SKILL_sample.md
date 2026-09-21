@@ -2,9 +2,7 @@ This is a sample `SKILL.md` — the exact file a real project would keep at
 `.claude/skills/text2sql-native-loop/SKILL.md`. Reproduced here on its own
 for the lecture, not wired into the repo.
 
----
 
-````markdown
 ---
 name: text2sql-native-loop
 description: >
@@ -143,56 +141,7 @@ relationships you had to work out. Keep it short and factual, plain
 Markdown, no fabricated detail. Next time this skill runs, step 1 reads
 that file first, so the discovery cost is paid once, not every
 conversation — same idea as the registry, different storage.
-````
 
----
 
-## Teaching point to say out loud
-
-Put this next to the graph's file count on screen — `state.py` (139),
-`graph.py` (290), `decisions.py` (213), plus 11 node files, ~2,800 lines
-total across `sql_agent/nodes/` — against this one file, well under 150
-lines, that does the same job. The lines you *didn't* have to write are the
-punchline: no `active_loop` field, because the model already knows which
-"loop" it's in from its own conversation history; no bounded iteration
-count, because the model decides for itself when to stop; no separate
-`ContextDecision`/`DiscoveryDecision`/`SQLDecision` structured models,
-because "should I call another tool or answer now" is the one decision the
-native loop already makes every single turn, for free.
-
-**What you give up, and say this too — it's not a free win.** Be precise
-about which cap you're actually losing: `MAX_DISCOVERY_ITERATIONS = 4`
-only bounds the *discovery* phase, and even there the graph doesn't just
-error out at the limit — `discovery_exit_node.py` catches it and forces a
-clean transition into the SQL loop with whatever schema knowledge was
-gathered so far, rather than failing the request. The SQL reasoning loop
-itself has no hard cap either — `route_after_sql_reasoner` in
-`decisions.py` just keeps going until the reasoner's own
-`execution_complete` says stop, exactly like this skill already works. So
-the honest comparison isn't "bounded vs. unbounded everywhere" — it's
-"the graph puts a hard floor under *one specific phase* (schema discovery)
-that this skill doesn't have anywhere." A confused native-loop run can
-burn turns re-discovering schema indefinitely; a confused graph run gets
-forcibly moved on after 4 tries, whether it's ready or not.
-
-One more asymmetry worth naming, caught by actually reading
-`validator_node.py`/`executor_node.py`/`verifier_node.py`: all three
-increment a `retry_count` on failure, but nothing in `decisions.py` ever
-checks it against a limit — there's no `route_after_validation` branch
-that says "too many retries, give up." It's tracked, not enforced. So
-that particular guarantee is weaker than the field name suggests, on
-either side of this comparison.
-
-Last one: `init_node.py` seeds two *separate* message histories,
-`discovery_messages` and `sql_messages` (lines 42–56), and every shared
-pipeline node routes its feedback into whichever one matches
-`active_loop`. Schema-discovery reasoning and query-answering reasoning
-never see each other's turns. This skill has one continuous conversation
-for both — schema exploration and query answering share the same
-context. That's not obviously worse, but it's not the same, and it's the
-one place the graph's extra machinery buys something this skill doesn't
-reproduce at all.
-
-The graph trades lines of code for guarantees; the skill trades
-guarantees for lines of code — just be specific about *which* guarantees,
+about *which* guarantees,
 not all of them equally. That precision *is* the lecture.
