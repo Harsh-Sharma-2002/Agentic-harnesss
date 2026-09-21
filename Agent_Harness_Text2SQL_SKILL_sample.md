@@ -1,8 +1,3 @@
-This is a sample `SKILL.md` — the exact file a real project would keep at
-`.claude/skills/text2sql-native-loop/SKILL.md`. Reproduced here on its own
-for the lecture, not wired into the repo.
-
-
 ---
 name: text2sql-native-loop
 description: >
